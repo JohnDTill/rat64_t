@@ -82,14 +82,21 @@ struct NumType{
         }
     }
 
+    void wordRatReduce(){
+        rat64_t r = asWordRat();
+        r.canonicalize();
+
+        if(r.den==1){
+            data = reinterpret_cast<void*>(r.num);
+            type = WordInt;
+        }else{
+            data = r;
+        }
+    }
+
     void reduce(){
         switch (type) {
-            case WordRat:
-                if(asWordRat().den==1){
-                    data = reinterpret_cast<void*>(asWordRat().num);
-                    type = WordInt;
-                }
-                break;
+            case WordRat: wordRatReduce(); break;
             case GmpInt: bigIntReduce(); break;
             case GmpRat: bigRatReduce(); break;
             case WordInt: break;
@@ -120,6 +127,7 @@ struct NumType{
             case WordRat: return asWordRat().toStr();
             case GmpInt: return asBigInt().get_str();
             case GmpRat: return asBigRat().get_str();
+            default: assert(false);
         }
     }
 
@@ -352,6 +360,37 @@ struct NumType{
     }
 
     template<bool reduce = true>
+    void operator/=(const NumType& other){
+        switch (other.type) {
+            case WordInt:{
+                int64_t z = other.asWordInt();
+                operator*=( z>=0 ? NumType(1,z) : NumType(-1,-z) );
+                break;
+            }
+            case WordRat:{
+                rat64_t q = other.asWordRat();
+                operator*=(mpq_class(q.den, q.num));
+                break;
+            }
+            case GmpInt:
+                operator*=(mpq_class(1,other.asBigInt()));
+                break;
+            case GmpRat:{
+                mpq_class recip = 1/other.asBigRat();
+                operator*=(recip);
+                break;
+            }
+        }
+    }
+
+    template<bool reduce = true>
+    NumType operator/(const NumType& other) const{
+        NumType ans(*this);
+        ans.operator/=<reduce>(other);
+        return ans;
+    }
+
+    template<bool reduce = true>
     void operator+=(const NumType& other){
         switch(typePair(type, other.type)){
             case typePair(WordInt, WordInt):
@@ -504,6 +543,123 @@ struct NumType{
         return ans;
     }
 
+    template<bool reduce = true>
+    void operator%=(const NumType& other){
+        switch(typePair(type, other.type)){
+            case typePair(WordInt, WordInt):
+                data = reinterpret_cast<void*>(asWordInt() % other.asWordInt());
+                break;
+            case typePair(WordInt, WordRat):{
+                rat64_t ans = other.asWordRat();
+                ans.num = (asWordInt()*ans.num) % ans.den;
+                data = ans;
+                type = WordRat;
+                wordRatReduce();
+                break;
+            }
+            case typePair(WordInt, GmpInt):
+                break;
+            case typePair(WordInt, GmpRat):{
+                mpq_class* ans = new mpq_class(other.asBigRat());
+                ans->get_num() = (asWordInt()*ans->get_num()) % ans->get_den();
+                data = ans;
+                type = GmpRat;
+                bigRatReduce();
+                break;
+            }
+            case typePair(WordRat, WordInt):{
+                rat64_t r = asWordRat();
+                r.num %= (r.den*other.asWordInt());
+                data = r;
+                break;
+            }
+            case typePair(WordRat, WordRat):{
+                rat64_t lhs = asWordRat();
+                rat64_t rhs = other.asWordRat();
+                int64_t den = lhs.den*rhs.den;
+                int64_t num = lhs.num*rhs.den % (lhs.den*rhs.num);
+                assert(den <= std::numeric_limits<uint32_t>::max()); //DO THIS - this can overflow
+                assert(num <= std::numeric_limits<int32_t>::max() && num >= std::numeric_limits<int32_t>::min());
+                data = rat64_t(num,den);
+                wordRatReduce();
+                break;
+            }
+            case typePair(WordRat, GmpInt):
+                break;
+            case typePair(WordRat, GmpRat):{
+                rat64_t lhs = asWordRat();
+                mpq_class& rhs = other.asBigRat();
+                mpq_class* ans = new mpq_class(lhs.num*rhs.get_den() % (lhs.den * rhs.get_num()),
+                                               rhs.get_den()*lhs.den);
+                data = ans;
+                type = GmpRat;
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpInt, WordInt):
+                asBigInt() %= (int32_t)other.asWordInt();
+                bigIntReduce();
+                break;
+            case typePair(GmpInt, WordRat):{
+                mpz_class lhs = asBigInt();
+                rat64_t rhs = other.asWordRat();
+                mpq_class* ans = new mpq_class(lhs*rhs.den % rhs.num, rhs.den);
+                data = ans;
+                type = GmpRat;
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpInt, GmpInt):
+                asBigInt() %= other.asBigInt();
+                bigIntReduce();
+                break;
+            case typePair(GmpInt, GmpRat):{
+                mpz_class lhs = asBigInt();
+                mpq_class& rhs = other.asBigRat();
+                mpq_class* ans = new mpq_class(lhs*rhs.get_den() % rhs.get_num(), rhs.get_den());
+                data = ans;
+                type = GmpRat;
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpRat, WordInt):{
+                mpq_class& r = asBigRat();
+                r.get_num() %= (r.get_den() * other.asWordInt());
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpRat, WordRat):{
+                mpq_class& lhs = asBigRat();
+                rat64_t rhs = other.asWordRat();
+                lhs.get_den() *= rhs.den;
+                lhs.get_num() = lhs.get_num()*rhs.den % (lhs.get_den()*rhs.num);
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpRat, GmpInt):{
+                mpq_class& r = asBigRat();
+                r.get_num() %= (r.get_den() * other.asBigInt());
+                bigRatReduce();
+                break;
+            }
+            case typePair(GmpRat, GmpRat):{
+                mpq_class& lhs = asBigRat();
+                mpq_class& rhs = other.asBigRat();
+                lhs.get_den() *= rhs.get_den();
+                lhs.get_num() = lhs.get_num()*rhs.get_den() % (lhs.get_den()*rhs.get_num());
+                bigRatReduce();
+                break;
+            }
+            default: assert(false);
+        }
+    }
+
+    template<bool reduce = true>
+    NumType operator%(const NumType& other) const{
+        NumType ans(*this);
+        ans.operator%=<reduce>(other);
+        return ans;
+    }
 };
 
 #endif // BIG_NUMERIC_SUM_TYPE_H

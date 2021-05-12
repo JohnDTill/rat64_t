@@ -55,6 +55,12 @@ struct rat64_t{
                full < std::numeric_limits<SignedHalfWord>::min();
     }
 
+    void canonicalize(){
+        const auto gcd = std::gcd(safeAbs(num), den);
+        num /= static_cast<int32_t>(gcd);
+        den /= gcd;
+    }
+
     SignedHalfWord num;
     UnsignedHalfWord den;
 
@@ -62,11 +68,10 @@ struct rat64_t{
 
     rat64_t(SignedHalfWord num) : num(num), den(1) {}
 
-    rat64_t(SignedHalfWord num, UnsignedHalfWord den){
+    rat64_t(SignedHalfWord num, UnsignedHalfWord den)
+        : num(num), den(den){
         assert(den!=0);
-        const auto gcd = std::gcd(safeAbs(num), den);
-        this->num = num / static_cast<int32_t>(gcd);
-        this->den = den / gcd;
+        canonicalize();
     }
 
     rat64_t(void* vpointer){
