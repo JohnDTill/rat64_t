@@ -1,8 +1,80 @@
+#include <chrono>
 #include <iostream>
 
 #include "rat64_t.h"
+#include "big_numeric_sum_type.h"
 
-using namespace std;
+constexpr size_t benchmark_iters = 500000;
+
+void benchmarkSumType(){
+    std::cout << "SumType Integer Mult: ";
+    auto start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        NumType t = 1;
+        for(size_t i = 0; i < 31; i++)
+            t *= 2;
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+
+    std::cout << "SumType Rational Mult: ";
+    start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        NumType t(1,2);
+        for(size_t i = 0; i < 31; i++)
+            t *= NumType(1,2);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+
+    std::cout << "SumType High Integer Mult: ";
+    start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        NumType t(1);
+        for(size_t i = 0; i < 256; i++)
+            t *= 2;
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+}
+
+void benchmarkGmp(){
+    std::cout << "mpq_class integer mult: ";
+    auto start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        mpq_class t = 1;
+        for(size_t i = 0; i < 31; i++)
+            t *= mpq_class(2);
+    }
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+
+    std::cout << "mpq_class rational mult: ";
+    start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        mpq_class t(1,2);
+        for(size_t i = 0; i < 31; i++)
+            t *= mpq_class(1,2);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+
+    std::cout << "mpq_class high integer mult: ";
+    start = std::chrono::high_resolution_clock::now();
+    for(size_t i = 0; i < benchmark_iters; i++){
+        mpq_class t(1);
+        for(size_t i = 0; i < 256; i++)
+            t *= mpq_class(2);
+    }
+    end = std::chrono::high_resolution_clock::now();
+    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end-start);
+    std::cout << duration.count() << "ms" << std::endl;
+}
 
 int main(){
     constexpr rat64_t::SignedHalfWord max_n = std::numeric_limits<int32_t>::max();
@@ -86,6 +158,48 @@ int main(){
     assert( rat64_t(static_cast<void*>(ans)) == ans );
     ans = rat64_t({max_n, max_d});
     assert( rat64_t(static_cast<void*>(ans)) == ans );
+
+    //Sum type tests
+    NumType t = NumType(1)*NumType(2);
+    assert(t.type == WordInt);
+    assert(t.asWordInt() == 2);
+
+    t *= 3;
+    assert(t.type == WordInt);
+    assert(t.asWordInt() == 6);
+
+    t *= NumType(std::numeric_limits<int32_t>::max());
+    assert(t.type == GmpInt);
+    assert(t.asBigInt() == mpz_class(6)*mpz_class(std::numeric_limits<int32_t>::max()));
+
+    t = NumType(1,2);
+    t *= t;
+    assert(t.type == WordRat);
+    assert(t.asWordRat() == rat64_t({1,4}));
+    t *= 4;
+    assert(t.type == WordInt);
+    assert(t.asWordInt() == 1);
+
+    t = NumType(1);
+    for(size_t i = 0; i < 31; i++)
+        t *= NumType(1,2);
+    assert(t.type == WordRat);
+    assert(t.asWordRat() == rat64_t({1, 1u << 31}));
+    t *= NumType(1,2);
+    assert(t.type == GmpRat);
+    assert(t.asBigRat().get_den().get_str() == std::to_string(1L << 32));
+
+    t = NumType(1,3) + NumType(1,2);
+    assert(t.type == WordRat);
+    assert(t.asWordRat() == rat64_t({5,6}));
+    t += NumType(1,6);
+    assert(t.type == WordInt);
+    assert(t.asWordInt() == 1);
+
+    std::cout << "ALL TESTS PASSING" << std::endl;
+
+    benchmarkSumType();
+    benchmarkGmp();
 
     return 0;
 }

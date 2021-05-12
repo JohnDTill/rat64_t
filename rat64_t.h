@@ -288,6 +288,10 @@ struct rat64_t{
             static_cast<SignedWord>(rhs.num)*static_cast<SignedWord>(den);
     }
 
+    bool operator<(int32_t rhs) const{
+        return num < static_cast<SignedWord>(rhs) * static_cast<SignedWord>(den);
+    }
+
     bool operator<=(const rat64_t& rhs) const{
         assert(std::gcd(safeAbs(num), den) == 1);
         assert(std::gcd(safeAbs(rhs.num), rhs.den) == 1);
