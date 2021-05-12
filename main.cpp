@@ -80,7 +80,7 @@ void benchmarkGmp(){
 
 int main(){
     constexpr rat64_t::SignedHalfWord max_n = std::numeric_limits<int32_t>::max();
-    constexpr rat64_t::SignedHalfWord min_n = std::numeric_limits<int32_t>::min();
+    constexpr rat64_t::SignedHalfWord min_n = std::numeric_limits<int32_t>::min()+1;
     constexpr rat64_t::UnsignedHalfWord max_d = std::numeric_limits<uint32_t>::max();
 
     rat64_t ans;
@@ -121,7 +121,6 @@ int main(){
 
     assert( rat64_t::multiply( rat64_t({max_n,1}), rat64_t({2,1}), ans ) );
     assert( rat64_t::multiply( rat64_t({min_n,1}), rat64_t({2,1}), ans ) );
-    assert( rat64_t::multiply( rat64_t({min_n,1}), rat64_t({-1,1}), ans ) );
     assert( rat64_t::multiply( rat64_t({1,max_d}), rat64_t({1,2}), ans ) );
 
     assert( !rat64_t::add( rat64_t({1,2}), rat64_t({1,2}), ans ) );
@@ -214,26 +213,28 @@ int main(){
     t = NumType(-5) % NumType(-3);
     assert(t.type == WordInt);
     assert(t.asWordInt() == -2);
-
     t = NumType(5,2) % NumType(2);
     assert(t.type == WordRat);
     assert(t.asWordRat() == rat64_t({1,2}));
-
     t = NumType(5) % NumType(2,3);
     assert(t.type == WordRat);
     assert(t.asWordRat() == rat64_t({1,3}));
-
     t = NumType(6) % NumType(2,3);
     assert(t.type == WordInt);
     assert(t.asWordInt() == 0);
-
     t = NumType(1,3) % NumType(1,4);
     assert(t.type == WordRat);
     assert(t.asWordRat() == rat64_t({1,12}));
-
     t = NumType(12,5) % NumType(7,5);
     assert(t.type == WordInt);
     assert(t.asWordInt() == 1);
+
+    t = std::abs(NumType(-1));
+    assert(t.type == WordInt);
+    assert(t.asWordInt() == 1);
+    t = std::abs(NumType(-1,2));
+    assert(t.type == WordRat);
+    assert(t.asWordRat() == rat64_t({1,2}));
 
     std::cout << "ALL TESTS PASSING" << std::endl;
 

@@ -20,12 +20,9 @@ struct rat64_t{
     typedef int64_t SignedWord;
     typedef uint64_t UnsignedWord;
 
-    //TODO: This code calls abs() without considering abs(std::numeric_limits<SignedHalfWord>::min()) is UB
-    //      probably should limit range so num == std::numeric_limits<SignedHalfWord>::min() is an "underflow"
-    //      or figure out how to cast to UnsignedHalfWord
-
     static UnsignedHalfWord safeAbs(const SignedHalfWord& num){
-        return std::abs(static_cast<SignedWord>(num));
+        assert(num != std::numeric_limits<SignedHalfWord>::min());
+        return std::abs(num);
     }
 
     static bool multWithOverflowCheck(UnsignedHalfWord a, UnsignedHalfWord b, UnsignedHalfWord& ans){
@@ -38,21 +35,21 @@ struct rat64_t{
         SignedWord full = static_cast<SignedWord>(a) * static_cast<SignedWord>(b);
         ans = full;
         return full > std::numeric_limits<SignedHalfWord>::max() ||
-               full < std::numeric_limits<SignedHalfWord>::min();
+               full <= std::numeric_limits<SignedHalfWord>::min();
     }
 
     static bool multWithOverflowCheck(SignedHalfWord a, UnsignedHalfWord b, SignedHalfWord& ans){
         SignedWord full = static_cast<SignedWord>(a) * static_cast<SignedWord>(b);
         ans = full;
         return full > std::numeric_limits<SignedHalfWord>::max() ||
-               full < std::numeric_limits<SignedHalfWord>::min();
+               full <= std::numeric_limits<SignedHalfWord>::min();
     }
 
     static bool multWithOverflowCheck(UnsignedHalfWord a, SignedWord b, SignedHalfWord& ans){
         SignedWord full = static_cast<SignedWord>(a) * static_cast<SignedWord>(b);
         ans = full;
         return full > std::numeric_limits<SignedHalfWord>::max() ||
-               full < std::numeric_limits<SignedHalfWord>::min();
+               full <= std::numeric_limits<SignedHalfWord>::min();
     }
 
     void canonicalize(){
@@ -61,21 +58,25 @@ struct rat64_t{
         den /= gcd;
     }
 
-    SignedHalfWord num;
+    SignedHalfWord num; //CANNOT be std::numeric_limits<int32_t>::min(), as it has no positive counterpart
     UnsignedHalfWord den;
 
     rat64_t() : num(0), den(1) {}
 
-    rat64_t(SignedHalfWord num) : num(num), den(1) {}
+    rat64_t(SignedHalfWord num) : num(num), den(1) {
+        assert(num != std::numeric_limits<int32_t>::min());
+    }
 
     rat64_t(SignedHalfWord num, UnsignedHalfWord den)
         : num(num), den(den){
+        assert(num != std::numeric_limits<int32_t>::min());
         assert(den!=0);
         canonicalize();
     }
 
     rat64_t(void* vpointer){
         memcpy(this, &vpointer, sizeof(rat64_t));
+        assert(num != std::numeric_limits<int32_t>::min());
         assert(den!=0);
     }
 
@@ -86,8 +87,13 @@ struct rat64_t{
         return vpointer;
     }
 
-    operator double() const{
+    operator double() const noexcept{
         return num / static_cast<double>(den);
+    }
+
+    rat64_t operator-() const noexcept{
+        assert(num != std::numeric_limits<int32_t>::min());
+        return rat64_t({-num, den});
     }
 
     static bool multiply(const rat64_t& lhs, const rat64_t& rhs, rat64_t& ans){
@@ -202,7 +208,7 @@ struct rat64_t{
             ans.den = den;
 
             return num > std::numeric_limits<SignedHalfWord>::max() ||
-                   num < std::numeric_limits<SignedHalfWord>::min() ||
+                   num <= std::numeric_limits<SignedHalfWord>::min() ||
                    den > std::numeric_limits<UnsignedHalfWord>::max();
         }
     }
@@ -221,8 +227,8 @@ struct rat64_t{
         // a/b - c/d = (a*d - b*c)/(b*d)
 
         UnsignedWord bd = static_cast<UnsignedWord>(lhs.den) * static_cast<UnsignedWord>(rhs.den);
-        SignedWord ad = static_cast<UnsignedWord>(rhs.num)*static_cast<UnsignedWord>(lhs.den);
-        SignedWord bc = -static_cast<UnsignedWord>(lhs.num)*static_cast<UnsignedWord>(rhs.den);
+        SignedWord ad = static_cast<SignedWord>(rhs.num)*static_cast<SignedWord>(lhs.den);
+        SignedWord bc = static_cast<SignedWord>(-lhs.num)*static_cast<SignedWord>(rhs.den);
 
         //Make sure to convert to larger type before negating, because
         // -std::numeric_limits<SignedWord>::min() is UB
@@ -241,7 +247,7 @@ struct rat64_t{
         ans.den = den;
 
         return num > std::numeric_limits<SignedHalfWord>::max() ||
-               num < std::numeric_limits<SignedHalfWord>::min() ||
+               num <= std::numeric_limits<SignedHalfWord>::min() ||
                den > std::numeric_limits<UnsignedHalfWord>::max();
     }
 
@@ -253,7 +259,7 @@ struct rat64_t{
             num *= lhs.num;
             den *= lhs.den;
             if(num > std::numeric_limits<SignedHalfWord>::max() ||
-               num < std::numeric_limits<SignedHalfWord>::min() ||
+               num <= std::numeric_limits<SignedHalfWord>::min() ||
                den > std::numeric_limits<UnsignedHalfWord>::max())
                 return true;
         }
@@ -324,6 +330,14 @@ struct rat64_t{
             static_cast<SignedWord>(rhs.num)*static_cast<SignedWord>(den);
     }
 
+    void operator%=(int64_t rhs) noexcept{
+        num %= den*rhs;
+    }
+
+    rat64_t operator%(int64_t rhs) noexcept{
+        return rat64_t({num %= den*rhs, den}); //Will not need any reduction
+    }
+
     bool greaterThanPi() const{
         //165707065/52746197 is the closest rat64_t to pi. It is greater by ~1.64084e-16.
         //80143857/25510582 is the closest rat64_t less than pi. It is less by ~5.79087e-16
@@ -331,5 +345,12 @@ struct rat64_t{
         return 52746197L*static_cast<SignedWord>(num) >= 165707065L*static_cast<SignedWord>(den);
     }
 };
+
+namespace std {
+    rat64_t abs(const rat64_t& val){
+        assert(val.num != std::numeric_limits<rat64_t::SignedHalfWord>::min());
+        return rat64_t({std::abs(val.num), val.den});
+    }
+}
 
 #endif // RAT64_T_H

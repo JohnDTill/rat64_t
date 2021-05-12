@@ -12,6 +12,8 @@
 //as opposed to using rationals
 //
 //There is a significant performance payoff. I'm still not sure it justifies the complexity!
+//Ofc mpq_class performs well with static typing, but if the choice is mpq_class for ALL numeric types
+//versus using a sum class, the sum class pays off.
 
 #include "rat64_t.h"
 #include <gmpxx.h>
@@ -33,6 +35,8 @@ struct NumType{
 
     inline int64_t asWordInt() const noexcept {
         assert(type == WordInt);
+        assert(reinterpret_cast<int64_t>(data) <= std::numeric_limits<int32_t>::max() &&
+               reinterpret_cast<int64_t>(data) > std::numeric_limits<int32_t>::min());
         return reinterpret_cast<int64_t>(data);
     }
     inline rat64_t asWordRat() const noexcept {
@@ -50,7 +54,7 @@ struct NumType{
 
     void bigIntReduce() noexcept{
         auto z = asBigInt();
-        if(mpz_fits_slong_p(z.get_mpz_t())){
+        if(z <= std::numeric_limits<int32_t>::max() && z > std::numeric_limits<int32_t>::min()){
             int64_t next = z.get_si();
             delete reinterpret_cast<mpz_class*>(data);
             data = reinterpret_cast<void*>(next);
@@ -63,7 +67,8 @@ struct NumType{
         r.canonicalize();
 
         if(r.get_den() == 1){
-            if(mpz_fits_slong_p(r.get_num_mpz_t())){
+            if(r.get_num() <= std::numeric_limits<int32_t>::max() &&
+               r.get_num() > std::numeric_limits<int32_t>::min()){
                 int64_t next = r.get_num().get_si();
                 delete reinterpret_cast<mpq_class*>(data);
                 data = reinterpret_cast<void*>(next);
@@ -74,7 +79,9 @@ struct NumType{
                 data = next;
                 type = GmpInt;
             }
-        }else if(r.get_den() <= std::numeric_limits<uint32_t>::max() && mpz_fits_slong_p(r.get_num_mpz_t())){
+        }else if(r.get_den() <= std::numeric_limits<uint32_t>::max() &&
+                 r.get_num() <= std::numeric_limits<int32_t>::max() &&
+                 r.get_num() > std::numeric_limits<int32_t>::min()){
             rat64_t next(r.get_num().get_si(), r.get_den().get_ui());
             delete reinterpret_cast<mpq_class*>(data);
             data = next;
@@ -103,16 +110,27 @@ struct NumType{
         }
     }
 
+    inline mpz_class toBigInt(int64_t z){
+        mpz_class big((int32_t)(z >> 32));
+        mpz_mul_2exp(big.get_mpz_t(), big.get_mpz_t(), 32);
+        mpz_add_ui(big.get_mpz_t(), big.get_mpz_t(), (uint32_t)z);
+        return big;
+    }
+
     void wordIntClamp(){
-        auto z = asWordInt();
-        if(z > std::numeric_limits<int32_t>::max() || z < std::numeric_limits<int32_t>::min()){
-            mpz_class* next = new mpz_class(std::to_string(z)); //This isn't great
+        assert(type == WordInt);
+        int64_t z = reinterpret_cast<int64_t>(data);
+        if(z > std::numeric_limits<int32_t>::max() || z <= std::numeric_limits<int32_t>::min()){
+            mpz_class* next = new mpz_class((int32_t)(z >> 32));
+            mpz_mul_2exp(next->get_mpz_t(), next->get_mpz_t(), 32);
+            mpz_add_ui(next->get_mpz_t(), next->get_mpz_t(), (uint32_t)z);
             data = next;
             type = GmpInt;
         }
     }
 
     NumType(int32_t val) : data(reinterpret_cast<void*>(val)), type(WordInt) {}
+    NumType(const rat64_t& r) : data(r), type(WordRat) {}
     NumType(rat64_t::SignedHalfWord num, rat64_t::UnsignedHalfWord den) : data(rat64_t(num, den)), type(WordRat){}
     NumType(const mpz_class& val) : data(new mpz_class(val)), type(GmpInt) {}
     NumType(const mpq_class& val) : data(new mpq_class(val)), type(GmpRat) {}
@@ -139,35 +157,15 @@ struct NumType{
     template<bool reduce = true>
     NumType operator-() const noexcept{
         switch (type) {
-            case WordInt:{
-                int64_t z = asWordInt();
-                if(z == std::numeric_limits<int32_t>::min()){
-                    mpz_class next(std::numeric_limits<int32_t>::min());
-                    next = -next;
-                    return NumType(next);
-                }else{
-                    return NumType(-z);
-                }
-            }
-            case WordRat:{
-                rat64_t r = asWordRat();
-                if(r.num == std::numeric_limits<int32_t>::min()){
-                    mpq_class next(r.num, r.den);
-                    next = -next;
-                    return NumType(next);
-                }else{
-                    return NumType(-r.num, r.den);
-                }
-            }
-            case GmpInt:{
-                mpz_class temp = asBigInt();
-                temp = -temp;
-                if(reduce && temp == std::numeric_limits<int32_t>::min())
-                    return NumType(std::numeric_limits<int32_t>::min());
-                else
-                    return NumType(temp);
-            }
-            case GmpRat: return NumType(-asBigRat());
+            case WordInt:
+                assert(asWordInt() != std::numeric_limits<int32_t>::min());
+                return NumType(-asWordInt());
+            case WordRat:
+                return NumType(-asWordRat());
+            case GmpInt:
+                return NumType((-asBigInt()).get_val());
+            case GmpRat:
+                return NumType(-asBigRat());
         }
     }
 
@@ -568,9 +566,7 @@ struct NumType{
                 break;
             }
             case typePair(WordRat, WordInt):{
-                rat64_t r = asWordRat();
-                r.num %= (r.den*other.asWordInt());
-                data = r;
+                data = asWordRat() % other.asWordInt();
                 break;
             }
             case typePair(WordRat, WordRat):{
@@ -578,10 +574,24 @@ struct NumType{
                 rat64_t rhs = other.asWordRat();
                 int64_t den = lhs.den*rhs.den;
                 int64_t num = lhs.num*rhs.den % (lhs.den*rhs.num);
-                assert(den <= std::numeric_limits<uint32_t>::max()); //DO THIS - this can overflow
-                assert(num <= std::numeric_limits<int32_t>::max() && num >= std::numeric_limits<int32_t>::min());
-                data = rat64_t(num,den);
-                wordRatReduce();
+                auto gcd = std::gcd(std::abs(num),den);
+                num /= gcd;
+                den /= gcd;
+
+                assert(num <= std::numeric_limits<int32_t>::max() &&
+                       num > std::numeric_limits<int32_t>::min()); //num can't increase
+
+                if(den == 1){
+                    data = reinterpret_cast<void*>(num);
+                    type = WordInt;
+                }else if(den <= std::numeric_limits<uint32_t>::max() &&
+                         num <= std::numeric_limits<int32_t>::max() &&
+                         num > std::numeric_limits<int32_t>::min()){
+                    data = rat64_t(num,den);
+                }else{
+                    data = new mpq_class(num, toBigInt(den));
+                    type = GmpRat;
+                }
                 break;
             }
             case typePair(WordRat, GmpInt):
@@ -661,5 +671,21 @@ struct NumType{
         return ans;
     }
 };
+
+namespace std {
+    NumType abs(const NumType& val){
+        switch (val.type) {
+            case WordInt: return NumType(std::abs(val.asWordInt()));
+            case WordRat: return NumType(std::abs(val.asWordRat()));
+            case GmpInt:{
+                mpz_class ab = abs(val.asBigInt());
+                return NumType(ab);
+            }
+            case GmpRat: return NumType(abs(val.asBigRat()));
+        }
+
+        assert(false);
+    }
+}
 
 #endif // BIG_NUMERIC_SUM_TYPE_H
