@@ -206,6 +206,24 @@ struct NumType{
         assert(false);
     }
 
+    bool operator<(int32_t other) const{
+        switch (type) {
+            case WordInt: return asWordInt() < other;
+            case WordRat: return asWordRat() < other;
+            case GmpInt: return asBigInt() < other;
+            case GmpRat: return asBigRat() < other;
+        }
+    }
+
+    bool operator>(int32_t other) const{
+        switch (type) {
+            case WordInt: return asWordInt() > other;
+            case WordRat: return asWordRat() > other;
+            case GmpInt: return asBigInt() > other;
+            case GmpRat: return asBigRat() > other;
+        }
+    }
+
     template<bool reduce = true>
     void operator*=(const NumType& other){
         switch(typePair(type, other.type)){
@@ -527,6 +545,14 @@ struct NumType{
         NumType ans(*this);
         ans.operator+=<reduce>(other);
         return ans;
+    }
+
+    friend NumType operator+(int32_t lhs, const NumType& rhs){
+        return rhs + lhs;
+    }
+
+    friend NumType operator-(int32_t lhs, const NumType& rhs){
+        return -rhs + lhs;
     }
 
     template<bool reduce = true>
