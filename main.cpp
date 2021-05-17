@@ -236,6 +236,9 @@ int main(){
     assert(t.type == WordRat);
     assert(t.asWordRat() == rat64_t({1,2}));
 
+    t = NumType(mpz_class("500000000")) * NumType(-100) + NumType(1)*NumType(mpz_class("-10000000000"));
+    assert(t.toString() == "-60000000000");
+
     std::cout << "ALL TESTS PASSING" << std::endl;
 
     benchmarkSumType();

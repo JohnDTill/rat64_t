@@ -51,6 +51,16 @@ struct NumType{
         assert(type == GmpRat);
         return *reinterpret_cast<mpq_class*>(data);
     }
+    inline mpz_class* takeOwnerShipOfBigInt() noexcept{
+        assert(type == GmpInt);
+        type = WordInt;
+        return reinterpret_cast<mpz_class*>(data);
+    }
+    inline mpq_class* takeOwnerShipOfBigRat() noexcept{
+        assert(type == GmpRat);
+        type = WordInt;
+        return reinterpret_cast<mpq_class*>(data);
+    }
 
     void bigIntReduce() noexcept{
         auto z = asBigInt();
@@ -137,6 +147,37 @@ struct NumType{
     ~NumType(){
         if(type == GmpInt) delete reinterpret_cast<mpz_class*>(data);
         else if(type == GmpRat) delete reinterpret_cast<mpq_class*>(data);
+    }
+    NumType(const NumType& other){
+        type = other.type;
+
+        //DO THIS - avoid rampant copying/allocation
+
+        if(type == GmpInt){
+            data = reinterpret_cast<void*>(new mpz_class(other.asBigInt()));
+        }else if(type == GmpRat){
+            data = reinterpret_cast<void*>(new mpq_class(other.asBigRat()));
+        }else{
+            data = other.data;
+        }
+    }
+    NumType& operator=(const NumType& other){
+        if(type == GmpInt) delete reinterpret_cast<mpz_class*>(data);
+        else if(type == GmpRat) delete reinterpret_cast<mpq_class*>(data);
+
+        type = other.type;
+
+        //DO THIS - avoid rampant copying/allocation
+
+        if(other.type == GmpInt){
+            data = reinterpret_cast<void*>(new mpz_class(other.asBigInt()));
+        }else if(other.type == GmpRat){
+            data = reinterpret_cast<void*>(new mpq_class(other.asBigRat()));
+        }else{
+            data = other.data;
+        }
+
+        return *this;
     }
 
     std::string toString() const{
