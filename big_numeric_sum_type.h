@@ -17,6 +17,7 @@
 
 #include "rat64_t.h"
 #include <gmpxx.h>
+#include <math.h>
 
 enum Type{
     GmpInt,
@@ -371,9 +372,9 @@ struct NumType{
                 mpq_class* next = new mpq_class(asBigInt());
                 delete reinterpret_cast<mpz_class*>(data);
                 next->operator*=(other.asWordRat().num);
-                next->operator*=(other.asWordRat().den);
+                next->operator/=(other.asWordRat().den);
                 data = next;
-                type = WordRat;
+                type = GmpRat;
                 if(reduce) bigRatReduce();
                 break;
             }
@@ -749,6 +750,58 @@ namespace std {
                 return NumType(ab);
             }
             case GmpRat: return NumType(abs(val.asBigRat()));
+        }
+
+        assert(false);
+    }
+
+    NumType pow(const NumType& num, const uint32_t& power){
+        assert(num != 0);
+        if(power == 0) return 1;
+        switch (num.type) {
+            case GmpInt:{
+                mpz_t rop;
+                mpz_init(rop);
+                mpz_pow_ui(rop, num.asBigInt().get_mpz_t(), power);
+                return mpz_class(rop);
+            }
+            case GmpRat:{
+                mpz_t rop_num;
+                mpz_init(rop_num);
+                mpz_pow_ui(rop_num, num.asBigRat().get_num_mpz_t(), power);
+                mpz_t rop_den;
+                mpz_init(rop_den);
+                mpz_pow_ui(rop_den, num.asBigRat().get_den_mpz_t(), power);
+                return mpq_class(mpz_class(rop_num), mpz_class(rop_den));
+            }
+            case WordInt:{
+                int32_t z = num.asWordInt();
+                if(power * std::log(z) < std::log(std::numeric_limits<int32_t>::max())){
+                    return std::pow(z, power);
+                }else{
+                    mpz_t rop;
+                    mpz_init(rop);
+                    mpz_ui_pow_ui(rop, std::abs(z), power);
+                    if(power%2 && z < 0) mpz_neg(rop, rop);
+                    return mpz_class(rop);
+                }
+            }
+            case WordRat:{
+                rat64_t q = num.asWordRat();
+                rat64_t ans;
+                if(rat64_t::power(q, power, ans)){
+                    mpz_t rop_num;
+                    mpz_init(rop_num);
+                    mpz_ui_pow_ui(rop_num, std::abs(q.num), power);
+                    if(power%2 && q.num < 0) mpz_neg(rop_num, rop_num);
+                    mpz_t rop_den;
+                    mpz_init(rop_den);
+                    mpz_ui_pow_ui(rop_den, q.den, power);
+                    return mpq_class(mpz_class(rop_num), mpz_class(rop_den));
+                }else{
+                    return ans;
+                }
+            }
         }
 
         assert(false);

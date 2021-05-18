@@ -239,6 +239,11 @@ int main(){
     t = NumType(mpz_class("500000000")) * NumType(-100) + NumType(1)*NumType(mpz_class("-10000000000"));
     assert(t.toString() == "-60000000000");
 
+    t = NumType(-100);
+    assert(std::pow(t,0).toString() == "1");
+    assert(std::pow(t,1).toString() == "-100");
+    assert(std::pow(t,2).toString() == "10000");
+
     std::cout << "ALL TESTS PASSING" << std::endl;
 
     benchmarkSumType();
