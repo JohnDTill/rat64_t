@@ -738,6 +738,31 @@ struct NumType{
         ans.operator%=<reduce>(other);
         return ans;
     }
+
+    static NumType factorial(int32_t z){
+        if(z > 12){
+            mpz_class ans = mpz_class::factorial(z);
+            return NumType(ans);
+        }else{
+            int32_t fact = 1;
+            while(z > 1) fact *= z--;
+            return fact;
+        }
+    }
+
+    NumType factorial() const{
+        assert(type != WordRat);
+        assert(type != GmpRat);
+        assert((type != WordInt || asWordInt() >= 0));
+        assert(asBigInt() >= 0);
+
+        if(type == WordInt){
+            return factorial(asWordInt());
+        }else{
+            mpz_class ans = mpz_class::factorial(asBigInt());
+            return NumType(ans);
+        }
+    }
 };
 
 namespace std {

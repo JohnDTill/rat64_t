@@ -252,6 +252,24 @@ int main(){
     return 0;
 }
 
+/*
+#include <gmpxx.h>
+void findMaxFactorial(){
+    for(size_t i = 10; true; i++){
+        if( mpz_class::factorial(mpz_class(i)) > std::numeric_limits<int32_t>::max() ){
+            std::cout << "The maximum int32_t factorial without overflow is " << i-1 << '!' << std::endl;
+            break;
+        }
+    }
+
+    for(size_t i = 10; true; i++){
+        if( mpz_class::factorial(mpz_class(i)) > std::numeric_limits<int64_t>::max() ){
+            std::cout << "The maximum int64_t factorial without overflow is " << i-1 << '!' << std::endl;
+            break;
+        }
+    }
+}
+*/
 
 /*
 #include <gmpxx.h>
