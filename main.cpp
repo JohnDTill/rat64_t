@@ -244,6 +244,9 @@ int main(){
     assert(std::pow(t,1).toString() == "-100");
     assert(std::pow(t,2).toString() == "10000");
 
+    t = NumType::binomialCoeff(5,2);
+    assert(t.toString() == "10");
+
     std::cout << "ALL TESTS PASSING" << std::endl;
 
     benchmarkSumType();
@@ -253,7 +256,17 @@ int main(){
 }
 
 /*
-#include <gmpxx.h>
+void findSafeBinomial(){
+    for(size_t n = 10; true; n++){
+        size_t k = n/2;
+        mpz_class c = mpz_class::factorial(n) / (mpz_class::factorial(k)*mpz_class::factorial(n-k));
+        if( c > std::numeric_limits<int32_t>::max() ){
+            std::cout << "The maximum int32_t n in (n,k) without overflow is " << n-1 << std::endl;
+            break;
+        }
+    }
+}
+
 void findMaxFactorial(){
     for(size_t i = 10; true; i++){
         if( mpz_class::factorial(mpz_class(i)) > std::numeric_limits<int32_t>::max() ){

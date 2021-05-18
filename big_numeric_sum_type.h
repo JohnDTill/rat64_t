@@ -140,6 +140,7 @@ struct NumType{
         }
     }
 
+    NumType() : data(0), type(WordInt) {}
     NumType(int32_t val) : data(reinterpret_cast<void*>(val)), type(WordInt) {}
     NumType(const rat64_t& r) : data(r), type(WordRat) {}
     NumType(rat64_t::SignedHalfWord num, rat64_t::UnsignedHalfWord den) : data(rat64_t(num, den)), type(WordRat){}
@@ -178,8 +179,6 @@ struct NumType{
         else if(type == GmpRat) delete reinterpret_cast<mpq_class*>(data);
 
         type = other.type;
-
-        //DO THIS - avoid rampant copying/allocation
 
         if(other.type == GmpInt){
             data = reinterpret_cast<void*>(new mpz_class(other.asBigInt()));
@@ -428,6 +427,31 @@ struct NumType{
         return ans;
     }
 
+    NumType reciprocal() const{
+        switch (type) {
+            case WordInt:{
+                int64_t z = asWordInt();
+                return (z>=0) ? NumType(1,z) : NumType(-1,-z);
+            }
+            case WordRat:{
+                rat64_t q = asWordRat();
+                if(q.num == 1){
+                    return (q.den < std::numeric_limits<int32_t>::max()) ?
+                            NumType(q.den) :
+                            NumType(mpz_class(q.den));
+                }else if(q.den < std::numeric_limits<int32_t>::max()){
+                    return (q.num>=0) ? NumType(q.den, q.num) : NumType(-(int32_t)q.den, -q.num);
+                }else{
+                    return mpq_class(q.den,q.num);
+                }
+            }
+            case GmpInt: return mpq_class(1, asBigInt());
+            case GmpRat: return asBigRat().get_num()==1 ?
+                         mpz_class(asBigRat().get_den()) :
+                         mpq_class(asBigRat().get_den(), asBigRat().get_num());
+        }
+    }
+
     template<bool reduce = true>
     void operator/=(const NumType& other){
         switch (other.type) {
@@ -454,9 +478,7 @@ struct NumType{
 
     template<bool reduce = true>
     NumType operator/(const NumType& other) const{
-        NumType ans(*this);
-        ans.operator/=<reduce>(other);
-        return ans;
+        return operator*(other.reciprocal());
     }
 
     template<bool reduce = true>
@@ -772,6 +794,22 @@ struct NumType{
         }else{
             mpz_class ans = mpz_class::factorial(asBigInt());
             return NumType(ans);
+        }
+    }
+
+    static NumType binomialCoeff(uint32_t n, uint32_t k){
+        assert(n >= k);
+        if(n > 33 && k > 1){ //Overflow is not possible for n <= 33. Could line-fit a better bound.
+            mpz_t rop;
+            mpz_init(rop);
+            mpz_bin_uiui(rop, n, k);
+            if(mpz_fits_sint_p(rop)) return mpz_get_si(rop);
+            else return mpz_class(rop);
+        }else{
+            uint64_t c = n;
+            for(uint64_t i = 2; i <= k; i++)
+                c *= (n+1-i)/i;
+            return c;
         }
     }
 };
