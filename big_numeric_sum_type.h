@@ -152,7 +152,7 @@ struct NumType{
     NumType(const NumType& other){
         type = other.type;
 
-        //DO THIS - avoid rampant copying/allocation
+        //std::cout << "Copy constructor" << std::endl;
 
         if(type == GmpInt){
             data = reinterpret_cast<void*>(new mpz_class(other.asBigInt()));
@@ -161,6 +161,17 @@ struct NumType{
         }else{
             data = other.data;
         }
+    }
+    NumType(NumType&& other) noexcept{
+        type = other.type;
+        data = other.data;
+        other.type = WordInt; //You gave me any pointers, so don't free them!
+    }
+    NumType& operator=(NumType&& other) noexcept{
+        type = other.type;
+        data = other.data;
+        other.type = WordInt; //You gave me any pointers, so don't free them!
+        return *this;
     }
     NumType& operator=(const NumType& other){
         if(type == GmpInt) delete reinterpret_cast<mpz_class*>(data);
