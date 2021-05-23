@@ -100,7 +100,7 @@ struct NumType{
         }
     }
 
-    void wordRatReduce(){
+    void wordRatReduce() noexcept{
         rat64_t r = asWordRat();
         r.canonicalize();
 
@@ -479,6 +479,56 @@ struct NumType{
     template<bool reduce = true>
     NumType operator/(const NumType& other) const{
         return operator*(other.reciprocal());
+    }
+
+    void inPlaceIntegerDivide(const NumType& other){
+        switch (typePair(type, other.type)) {
+            case typePair(WordInt, WordInt):
+                assert(asWordInt() % other.asWordInt() == 0);
+                data = reinterpret_cast<void*>(asWordInt() / other.asWordInt());
+                return;
+            case typePair(GmpInt, WordInt):{
+                assert(asBigInt() % other.asWordInt() == 0);
+                asBigInt() /= other.asWordInt();
+                bigIntReduce();
+                return;
+            }
+            case typePair(GmpInt, GmpInt):{
+                assert(asBigInt() % other.asBigInt() == 0);
+                asBigInt() /= other.asBigInt();
+                bigIntReduce();
+                return;
+            }
+            default: assert(false);
+        }
+    }
+
+    NumType integerDivide(const NumType& other) const{
+        NumType ans(*this);
+        ans.inPlaceIntegerDivide(other);
+        return ans;
+    }
+
+    void inPlaceIntegerDivide(int32_t other){
+        switch (type) {
+            case WordInt:
+                assert(asWordInt() % other == 0);
+                data = reinterpret_cast<void*>(asWordInt() / other);
+                return;
+            case GmpInt:{
+                assert(asBigInt() % other == 0);
+                asBigInt() /= other;
+                bigIntReduce();
+                return;
+            }
+            default: assert(false);
+        }
+    }
+
+    NumType integerDivide(int32_t other) const{
+        NumType ans(*this);
+        ans.inPlaceIntegerDivide(other);
+        return ans;
     }
 
     template<bool reduce = true>
