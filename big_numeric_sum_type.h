@@ -73,9 +73,10 @@ struct NumType{
         }
     }
 
+    template<bool canonicalize = true>
     void bigRatReduce(){
         auto r = asBigRat();
-        r.canonicalize();
+        if(canonicalize) r.canonicalize();
 
         if(r.get_den() == 1){
             if(r.get_num() <= std::numeric_limits<int32_t>::max() &&
@@ -529,6 +530,67 @@ struct NumType{
         NumType ans(*this);
         ans.inPlaceIntegerDivide(other);
         return ans;
+    }
+
+    void inPlaceRemainderlessDivide(const NumType& other){
+        switch (typePair(type, other.type)) {
+            case typePair(WordInt, WordInt):
+                assert(asWordInt() % other.asWordInt() == 0);
+                data = reinterpret_cast<void*>(asWordInt() / other.asWordInt());
+                return;
+            case typePair(GmpInt, WordInt):
+                assert(asBigInt() % other.asWordInt() == 0);
+                asBigInt() /= other.asWordInt();
+                bigIntReduce();
+                return;
+            case typePair(GmpInt, GmpInt):
+                assert(asBigInt() % other.asBigInt() == 0);
+                asBigInt() /= other.asBigInt();
+                bigIntReduce();
+                return;
+            case typePair(WordRat, WordInt):{
+                assert(asWordRat().num % other.asWordInt() == 0);
+                rat64_t q = asWordRat();
+                q.num /= other.asWordInt();
+                data = q;
+                return;
+            }
+            case typePair(WordRat, WordRat):{
+                    assert(asWordRat().num % other.asWordRat().num == 0);
+                    assert(asWordRat().den % other.asWordRat().den == 0);
+                    rat64_t q = asWordRat();
+                    rat64_t div = other.asWordRat();
+                    q.num /= div.num;
+                    q.den /= div.den;
+                    data = q;
+                    return;
+            }
+            case typePair(GmpRat, WordInt):
+                assert(asBigRat().get_num() % other.asWordInt() == 0);
+                asBigRat().get_num() /= other.asWordInt();
+                bigRatReduce<false>();
+                return;
+            case typePair(GmpRat, WordRat):
+                assert(asBigRat().get_num() % other.asWordRat().num == 0);
+                assert(asBigRat().get_den() % other.asWordRat().den == 0);
+                asBigRat().get_num() /= other.asWordRat().num;
+                asBigRat().get_den() /= other.asWordRat().den;
+                bigRatReduce<false>();
+                return;
+            case typePair(GmpRat, GmpInt):
+                assert(asBigRat().get_num() % other.asBigInt() == 0);
+                asBigRat().get_num() /= other.asBigInt();
+                bigRatReduce<false>();
+                return;
+            case typePair(GmpRat, GmpRat):
+                assert(asBigRat().get_num() % other.asBigRat().get_num() == 0);
+                assert(asBigRat().get_den() % other.asBigRat().get_den() == 0);
+                asBigRat().get_num() /= other.asBigRat().get_num();
+                asBigRat().get_den() /= other.asBigRat().get_den();
+                bigRatReduce<false>();
+                return;
+            default: assert(false);
+        }
     }
 
     template<bool reduce = true>
