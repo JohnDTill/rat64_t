@@ -919,8 +919,11 @@ struct NumType{
             else return mpz_class(rop);
         }else{
             uint64_t c = n;
-            for(uint64_t i = 2; i <= k; i++)
-                c *= (n+1-i)/i;
+            for(uint64_t i = 2; i <= k; i++){
+                c *= n+1-i;
+                c /= i;
+            }
+
             return c;
         }
     }

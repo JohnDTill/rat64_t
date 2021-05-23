@@ -247,6 +247,9 @@ int main(){
     t = NumType::binomialCoeff(5,2);
     assert(t.toString() == "10");
 
+    t = NumType::binomialCoeff(4+15-1, 4-1);
+    assert(t.toString() == "816");
+
     std::cout << "ALL TESTS PASSING" << std::endl;
 
     benchmarkSumType();
